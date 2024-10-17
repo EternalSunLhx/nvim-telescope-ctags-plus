@@ -1,6 +1,6 @@
 -- The idea is to create a picker that replaces the functionality of `g[` in vim.
--- TODO: But also it should just jump to the tag if there is only a single match.
 
+local actions = require "telescope.actions"
 local pickers = require "telescope.pickers"
 local finders = require "telescope.finders"
 local previewers = require "telescope.previewers"
@@ -66,6 +66,17 @@ ctags_plus.jump_to_tag = function(opts)
       }
       return true
     end,
+    _completion_callbacks = {
+      function(picker)
+        if picker.manager:num_results() == 1 then
+          -- picker:toggle_selection(picker:get_row(1))
+          -- actions.select_default(picker.prompt_bufnr)
+
+          actions.close(picker.prompt_bufnr)
+          vim.cmd.tag(word)
+        end
+      end,
+    }
   })
   :find()
 end
