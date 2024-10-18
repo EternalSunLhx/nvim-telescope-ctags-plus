@@ -36,34 +36,35 @@ ctags_plus.jump_to_tag = function(opts)
   opts.entry_maker = vim.F.if_nil(opts.entry_maker, make_entry.gen_from_ctags(opts))
 
   pickers.new(opts, {
+    push_cursor_on_edit = true,
     prompt_title = "Matching Tags",
     finder = finders.new_oneshot_job(flatten { "readtags", "-e", "-t", tagfiles, "-", word }, opts),
     previewer = previewers.ctags.new(opts),
     sorter = conf.generic_sorter(opts),
     attach_mappings = function()
-      action_set.select:enhance {
-        post = function()
-          local selection = action_state.get_selected_entry()
-          if not selection then
-            return
-          end
+        action_set.select:enhance {
+          post = function()
+            local selection = action_state.get_selected_entry()
+            if not selection then
+              return
+            end
 
-          if selection.scode then
-            -- un-escape / then escape required
-            -- special chars for vim.fn.search()
-            -- ] ~ *
-            local scode = selection.scode:gsub([[\/]], "/"):gsub("[%]~*]", function(x)
-              return "\\" .. x
-            end)
+            if selection.scode then
+              -- un-escape / then escape required
+              -- special chars for vim.fn.search()
+              -- ] ~ *
+              local scode = selection.scode:gsub([[\/]], "/"):gsub("[%]~*]", function(x)
+                return "\\" .. x
+              end)
 
-            vim.cmd "norm! gg"
-            vim.fn.search(scode)
-            vim.cmd "norm! zz"
-          else
-            vim.api.nvim_win_set_cursor(0, { selection.lnum, 0 })
-          end
-        end,
-      }
+              vim.cmd "keepjumps norm! gg"
+              vim.fn.search(scode)
+              vim.cmd "norm! zz"
+            else
+              vim.api.nvim_win_set_cursor(0, { selection.lnum, 0 })
+            end
+          end,
+        }
       return true
     end,
     _completion_callbacks = {
