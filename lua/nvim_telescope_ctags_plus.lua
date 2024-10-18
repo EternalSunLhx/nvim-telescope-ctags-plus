@@ -6,39 +6,174 @@ local finders = require "telescope.finders"
 local previewers = require "telescope.previewers"
 local action_state = require "telescope.actions.state"
 local action_set = require "telescope.actions.set"
-local make_entry = require "telescope.make_entry"
 local utils = require "telescope.utils"
 local conf = require("telescope.config").values
+local entry_display = require "telescope.pickers.entry_display"
 
 local flatten = vim.tbl_flatten
+local Path = require "plenary.path"
 
 local ctags_plus = {}
 
-ctags_plus.jump_to_tag = function(opts)
+local handle_entry_index = function(opts, t, k)
+  local override = ((opts or {}).entry_index or {})[k]
+  if not override then
+    return
+  end
+
+  local val, save = override(t, opts)
+  if save then
+    rawset(t, k, val)
+  end
+  return val
+end
+
+local function gen_from_ctags(opts)
   opts = opts or {}
-  opts.bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
+
+  local show_kind = vim.F.if_nil(opts.show_kind, true)
+  local cwd = utils.path_expand(opts.cwd or vim.loop.cwd())
+  local current_file = Path:new(vim.api.nvim_buf_get_name(opts.bufnr)):normalize(cwd)
+
+  local display_items = {
+    { width = 16 },
+    { remaining = true },
+  }
+
+  local idx = 1
+  local hidden = utils.is_path_hidden(opts)
+  if not hidden then
+    table.insert(display_items, idx, { width = vim.F.if_nil(opts.fname_width, 30) })
+    idx = idx + 1
+  end
+
+  if opts.show_line then
+    table.insert(display_items, idx, { width = 30 })
+  end
+
+  local displayer = entry_display.create {
+    separator = " │ ",
+    items = display_items,
+  }
+
+  local make_display = function(entry)
+    local display_path, path_style = utils.transform_path(opts, entry.filename)
+
+    local scode
+    if opts.show_line then
+      scode = entry.scode
+    end
+
+    if hidden then
+      return displayer {
+        entry.tag,
+        scode,
+      }
+    else
+      return displayer {
+        {
+          display_path,
+          function()
+            return path_style or {}
+          end,
+        },
+        entry.tag,
+        entry.kind,
+        scode,
+      }
+    end
+  end
+
+  local mt = {}
+  mt.__index = function(t, k)
+    local override = handle_entry_index(opts, t, k)
+    if override then
+      return override
+    end
+
+    if k == "path" then
+      local retpath = Path:new({ t.filename }):absolute()
+      if not vim.loop.fs_access(retpath, "R") then
+        retpath = t.filename
+      end
+      return retpath
+    end
+  end
+
+  local current_file_cache = {}
+  return function(tag_data)
+    local tag = tag_data.name
+    local file = tag_data.filename
+    local scode = tag_data.cmd:sub(3, -2)
+    local kind = tag_data.kind
+    local line = tag_data.line
+
+    if Path.path.sep == "\\" then
+      file = string.gsub(file, "/", "\\")
+    end
+
+    if opts.only_current_file then
+      if current_file_cache[file] == nil then
+        current_file_cache[file] = Path:new(file):normalize(cwd) == current_file
+      end
+
+      if current_file_cache[file] == false then
+        return nil
+      end
+    end
+
+    local tag_entry = {}
+    if opts.only_sort_tags then
+      tag_entry.ordinal = tag
+    else
+      tag_entry.ordinal = file .. ": " .. tag
+    end
+
+    tag_entry.display = make_display
+    tag_entry.scode = scode
+    tag_entry.tag = tag
+    tag_entry.filename = file
+    tag_entry.col = 1
+    tag_entry.lnum = line and tonumber(line) or 1
+    if show_kind then
+      tag_entry.kind = kind
+    end
+
+    return setmetatable(tag_entry, mt)
+  end
+end
+
+ctags_plus.jump_to_tag = function(opts)
   -- Get the word under the cursor presently
   local word = vim.fn.expand "<cword>"
-  -- Get tag file
-  local tagfiles = opts.ctags_file and { opts.ctags_file } or vim.fn.tagfiles()
-  for i, ctags_file in ipairs(tagfiles) do
-    tagfiles[i] = vim.fn.expand(ctags_file, true)
-  end
-  -- Raise error if there is no tags file
-  if vim.tbl_isempty(tagfiles) then
+
+  local tags = vim.fn.taglist("^" .. word)
+  local size = #tags
+  if size == 0 then
     utils.notify("gnfisher.ctags_plus", {
-      msg = "No tags file found. Create one with ctags -R",
+      msg = "No tags found!",
       level = "ERROR",
     })
     return
   end
 
-  opts.entry_maker = vim.F.if_nil(opts.entry_maker, make_entry.gen_from_ctags(opts))
+  if size == 1 then
+    vim.cmd.tag(word)
+    return
+  end
+
+  opts = opts or {}
+  opts.bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
+ 
+  local finder_opt = {
+    results = tags,
+    entry_maker = vim.F.if_nil(opts.entry_maker, gen_from_ctags(opts)),
+  }
 
   pickers.new(opts, {
     push_cursor_on_edit = true,
     prompt_title = "Matching Tags",
-    finder = finders.new_oneshot_job(flatten { "readtags", "-e", "-t", tagfiles, "-", word }, opts),
+    finder = finders.new_table(finder_opt),
     previewer = previewers.ctags.new(opts),
     sorter = conf.generic_sorter(opts),
     attach_mappings = function()
@@ -67,24 +202,6 @@ ctags_plus.jump_to_tag = function(opts)
         }
       return true
     end,
-    _completion_callbacks = {
-      function(picker)
-        local find_count = picker.stats.processed or 0
-        if find_count < 1 then
-          actions.close(picker.prompt_bufnr)
-          vim.api.nvim_err_writeln("No Tags Found!")
-          return
-        end
-
-        if find_count ~= 1 then return end
-
-        -- picker:toggle_selection(picker:get_row(1))
-        -- actions.select_default(picker.prompt_bufnr)
-
-        actions.close(picker.prompt_bufnr)
-        vim.cmd.tag(word)
-      end,
-    }
   })
   :find()
 end
