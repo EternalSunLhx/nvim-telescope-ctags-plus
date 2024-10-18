@@ -68,13 +68,20 @@ ctags_plus.jump_to_tag = function(opts)
     end,
     _completion_callbacks = {
       function(picker)
-        if picker.manager:num_results() == 1 then
-          -- picker:toggle_selection(picker:get_row(1))
-          -- actions.select_default(picker.prompt_bufnr)
-
+        local find_count = picker.stats.processed or 0
+        if find_count < 1 then
           actions.close(picker.prompt_bufnr)
-          vim.cmd.tag(word)
+          vim.api.nvim_err_writeln("No Tags Found!")
+          return
         end
+
+        if find_count ~= 1 then return end
+
+        -- picker:toggle_selection(picker:get_row(1))
+        -- actions.select_default(picker.prompt_bufnr)
+
+        actions.close(picker.prompt_bufnr)
+        vim.cmd.tag(word)
       end,
     }
   })
