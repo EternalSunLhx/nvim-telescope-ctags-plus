@@ -143,17 +143,16 @@ local function gen_from_ctags(opts)
   end
 end
 
+local tag_not_found_msg = { msg = "No tags found!", level = "ERROR", }
+
 ctags_plus.jump_to_tag = function(opts)
   -- Get the word under the cursor presently
   local word = vim.fn.expand "<cword>"
 
-  local tags = vim.fn.taglist("^" .. word)
+  local tags = vim.fn.taglist(string.format("^%s$\\C", word))
   local size = #tags
   if size == 0 then
-    utils.notify("gnfisher.ctags_plus", {
-      msg = "No tags found!",
-      level = "ERROR",
-    })
+    utils.notify("gnfisher.ctags_plus", tag_not_found_msg)
     return
   end
 
