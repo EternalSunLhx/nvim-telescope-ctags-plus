@@ -145,9 +145,53 @@ end
 
 local tag_not_found_msg = { msg = "No tags found!", level = "ERROR", }
 
+function SplitCursorCompound()
+  -- 获取当前行和光标位置
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.api.nvim_win_get_cursor(0)[2] + 1  -- 列从 1 开始
+
+  -- 定义复合词模式（字母、数字、下划线、点号）
+  local pattern = "[%w_%.]+"
+
+  -- 查找复合词起始和结束位置
+  local start = col
+  while start > 1 do
+    local char = line:sub(start-1, start-1)
+    if not char:match(pattern) then break end
+    start = start - 1
+  end
+
+  local finish = col
+  while finish <= #line do
+    local char = line:sub(finish, finish)
+    if not char:match(pattern) then break end
+    finish = finish + 1
+  end
+
+  -- 提取完整复合词
+  local full_word = line:sub(start, finish-1)
+
+  -- 分割为两部分（按最后一个点号分隔）
+  local parts = {}
+  for part in full_word:gmatch("[^.]+") do
+    table.insert(parts, part)
+  end
+
+  if #parts >= 2 then
+    -- 组合前缀和后缀（如 "ApkMod" 和 "isMobilePlatform"）
+    local prefix = table.concat(parts, ".", 1, #parts-1)
+    local suffix = parts[#parts]
+    return prefix, suffix
+  else
+    -- 无点号时返回整个词和空字符串
+    return full_word, ""
+  end
+end
+
 ctags_plus.jump_to_tag = function(opts)
   -- Get the word under the cursor presently
-  local word = vim.fn.expand "<cword>"
+  local mod, word = SplitCursorCompound()
+  --print("****************word", mod, word)
 
   local tags = vim.fn.taglist(string.format("^%s$\\C", word))
   local size = #tags
@@ -159,6 +203,25 @@ ctags_plus.jump_to_tag = function(opts)
   if size == 1 then
     vim.cmd.tag(word)
     return
+  end
+  
+  -- 3. 遍历标签查找包含特定字符串的条目
+  for _, tag in ipairs(tags) do
+  -- 检查标签名或文件名是否包含目标字符串（按需修改条件）
+    if string.find(tag.filename, mod) then
+      -- 4. 执行跳转逻辑
+      vim.cmd("edit " .. tag.filename)  -- 打开文件
+      
+      -- 处理 cmd 字段（行号或搜索命令）
+      if tonumber(tag.cmd) then
+        vim.cmd("normal! " .. tag.cmd .. "G")  -- 跳转到行号
+      else
+        vim.cmd(tag.cmd)  -- 执行搜索命令（如 /^pattern/）
+      end
+      
+      -- 找到第一个匹配项后立即跳转（若需选择多个结果可调整）
+      return
+    end
   end
 
   opts = opts or {}
