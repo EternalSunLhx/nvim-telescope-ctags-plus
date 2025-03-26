@@ -1,5 +1,3 @@
--- The idea is to create a picker that replaces the functionality of `g[` in vim.
-
 local actions = require "telescope.actions"
 local pickers = require "telescope.pickers"
 local finders = require "telescope.finders"
@@ -184,7 +182,7 @@ function SplitCursorCompound()
     return prefix, suffix
   else
     -- 无点号时返回整个词和空字符串
-    return full_word, ""
+    return "", full_word
   end
 end
 
@@ -204,24 +202,25 @@ ctags_plus.jump_to_tag = function(opts)
     vim.cmd.tag(word)
     return
   end
-  
-  -- 3. 遍历标签查找包含特定字符串的条目
-  for _, tag in ipairs(tags) do
-  -- 检查标签名或文件名是否包含目标字符串（按需修改条件）
-    if string.find(tag.filename, mod) then
-      -- 4. 执行跳转逻辑
-      vim.cmd("edit " .. tag.filename)  -- 打开文件
-      
-      -- 处理 cmd 字段（行号或搜索命令）
-      if tonumber(tag.cmd) then
-        vim.cmd("normal! " .. tag.cmd .. "G")  -- 跳转到行号
-      else
-        vim.cmd(tag.cmd)  -- 执行搜索命令（如 /^pattern/）
+  if mod and mod ~= "" then
+      -- 3. 遍历标签查找包含特定字符串的条目
+      for _, tag in ipairs(tags) do
+          -- 检查标签名或文件名是否包含目标字符串（按需修改条件）
+          if string.find(tag.filename, mod) then
+              -- 4. 执行跳转逻辑
+              vim.cmd("edit " .. tag.filename)  -- 打开文件
+
+              -- 处理 cmd 字段（行号或搜索命令）
+              if tonumber(tag.cmd) then
+                  vim.cmd("normal! " .. tag.cmd .. "G")  -- 跳转到行号
+              else
+                  vim.cmd(tag.cmd)  -- 执行搜索命令（如 /^pattern/）
+              end
+
+              -- 找到第一个匹配项后立即跳转（若需选择多个结果可调整）
+              return
+          end
       end
-      
-      -- 找到第一个匹配项后立即跳转（若需选择多个结果可调整）
-      return
-    end
   end
 
   opts = opts or {}
