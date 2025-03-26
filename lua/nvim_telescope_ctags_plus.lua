@@ -202,6 +202,9 @@ ctags_plus.jump_to_tag = function(opts)
     vim.cmd.tag(word)
     return
   end
+  if mod == "" then
+      mod = vim.fn.expand("%:t:r")
+  end
   if mod and mod ~= "" then
       -- 3. 遍历标签查找包含特定字符串的条目
       for _, tag in ipairs(tags) do
