@@ -198,7 +198,7 @@ ctags_plus.jump_to_tag = function(opts)
     return
   end
 
-  if size == 1 then
+  if mod == "" and size == 1 then
     vim.cmd.tag(word)
     return
   end
@@ -224,6 +224,8 @@ ctags_plus.jump_to_tag = function(opts)
               return
           end
       end
+	  utils.notify("gnfisher.ctags_plus", tag_not_found_msg)
+	  return
   end
 
   opts = opts or {}
