@@ -177,7 +177,7 @@ function SplitCursorCompound()
 
   if #parts >= 2 then
     -- 组合前缀和后缀（如 "ApkMod" 和 "isMobilePlatform"）
-    local prefix = table.concat(parts, ".", 1, #parts-1)
+    local prefix = parts[#parts-1]
     local suffix = parts[#parts]
     return prefix, suffix
   else
