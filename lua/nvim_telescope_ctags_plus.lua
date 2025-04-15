@@ -211,7 +211,7 @@ ctags_plus.jump_to_tag = function(opts)
           -- 检查标签名或文件名是否包含目标字符串（按需修改条件）
           if string.find(tag.filename, mod) then
               -- 4. 执行跳转逻辑
-              vim.cmd("edit " .. tag.filename)  -- 打开文件
+              vim.cmd("edit! " .. tag.filename)  -- 打开文件
 
               -- 处理 cmd 字段（行号或搜索命令）
               if tonumber(tag.cmd) then
